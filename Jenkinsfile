@@ -33,19 +33,23 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Image') {
-            steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS_ID}") {
-                        // Builds and pushes your-dockerhub-username/maker:<BUILD_NUMBER> and :latest
-                        def appImage = docker.image("${DOCKER_IMAGE}:${env.BUILD_NUMBER}")
-                        appImage.build()
-                        appImage.push()
-                        appImage.push('latest')
-                    }
-                }
+        stage('Build & Post Docker Image') {
+    steps {
+        script {
+            withCredentials([usernamePassword(credentialsId: '${DOCKER_CREDENTIALS_ID}', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    
+                    # Build using the 'maker' subfolder as context and pointing to the Dockerfile inside it
+                    docker build -t ${DOCKER_IMAGE}:${env.BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest -f maker/Dockerfile maker
+                    
+                    docker push ${DOCKER_IMAGE}:${env.BUILD_NUMBER}
+                    docker push ${DOCKER_IMAGE}:latest
+                '''
             }
         }
+    }
+}
 
         stage('Update Manifest Repo') {
             steps {
