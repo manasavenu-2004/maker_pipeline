@@ -62,16 +62,18 @@ pipeline {
                             git pull --rebase origin main
                             
                             # Perform sed update, commit, and push
-                            sh '''
-echo "===== CURRENT DIRECTORY ====="
-pwd
+                           sh(
+    script: '''
+        echo "===== CURRENT DIRECTORY ====="
+        pwd
 
-echo "===== FILES ====="
-ls -la
+        echo "===== FILES ====="
+        ls -la
 
-echo "===== FIND DEPLOYMENT ====="
-find . -name deployment.yaml
-'''
+        echo "===== FIND DEPLOYMENT ====="
+        find . -name "deployment.yaml"
+    '''
+)
                             git config user.name "manasavenu-2004"
                             git config user.email "manasavenu88914@gmail.com"
                             git commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
