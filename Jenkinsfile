@@ -41,7 +41,7 @@ pipeline {
                     echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                     
                     # Build using the 'maker' subfolder as context and pointing to the Dockerfile inside it
-                    docker build -t ${DOCKER_IMAGE}:${env.BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest -f maker/Dockerfile maker
+                    docker build -t ${DOCKER_IMAGE}:${env.BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest -f Dockerfile maker
                     
                     docker push ${DOCKER_IMAGE}:${env.BUILD_NUMBER}
                     docker push ${DOCKER_IMAGE}:latest
