@@ -50,18 +50,25 @@ pipeline {
     }
 }
 
-        stage('Update Manifest Repo') {
+       stage('Update Manifest Repo') {
             steps {
                 dir('manifest-workspace') {
-                    git branch: "${MANIFEST_BRANCH}", credentialsId: "${GIT_CREDENTIALS_ID}", url: "${MANIFEST_REPO}"
-
-                    sh """
-                        # Updates the 'maker' container image tag to your-dockerhub-username/maker:<BUILD_NUMBER>
-                        sed -i '/name: maker/{n;s|image:.*|image: ${DOCKER_IMAGE}:${env.BUILD_NUMBER}|}' manifests/deployment.yaml
-                        
-                        git -c user.name='manasavenu-2004' -c user.email='manasavenu88914@gmail.com' commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
-                        git push origin ${MANIFEST_BRANCH}
-                    """
+                    withCredentials([usernamePassword(credentialsId: 'github-cred', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh """
+                            # Configure remote URL with properly escaped variables for pushing
+                            git remote set-url origin https://\${GH_USER}:\${GH_TOKEN}@github.com/manasavenu-2004/maker_pipeline.git
+                            
+                            # Fetch and rebase to get any latest changes from remote
+                            git pull --rebase origin main
+                            
+                            # Perform sed update, commit, and push
+                            sed -i '/name: maker/{n;s|image:.*|image: 8089278330/maker:${env.BUILD_NUMBER}|}' manifests/deployment.yaml
+                            git config user.name "manasavenu-2004"
+                            git config user.email "manasavenu88914@gmail.com"
+                            git commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
+                            git push origin main
+                        """
+                    }
                 }
             }
         }
