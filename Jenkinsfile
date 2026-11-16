@@ -66,35 +66,23 @@ pipeline {
         stage('Update Manifest Repo') {
             steps {
                 dir('manifest-workspace') {
-
-                    // Clone the manifest repository
-                    git branch: "${MANIFEST_BRANCH}",
-                        credentialsId: "${GIT_CREDENTIALS_ID}",
-                        url: "${MANIFEST_REPO}"
-
-                    sh """
-                        echo "===== CURRENT DIRECTORY ====="
-                        pwd
-
-                        echo "===== FILES ====="
-                        ls -la
-
-                        echo "===== MANIFEST FILE ====="
-                        ls -la manifests/
-
-                        # Update Docker image tag
-                        sed -i '/name: maker/{n;s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|}' manifests/deployment.yaml
-
-                        # Configure Git identity
-                        git config user.name "manasavenu-2004"
-                        git config user.email "manasavenu88914@gmail.com"
-
-                        # Commit and push updated manifest
-                        git add manifests/deployment.yaml
-                        git commit -m "chore(manifest): update maker image tag to ${BUILD_NUMBER} [skip ci]" || echo "No changes to commit"
-
-                        git push origin ${MANIFEST_BRANCH}
-                    """
+                    withCredentials([usernamePassword(credentialsId: 'github-cred', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh """
+                            # Configure remote URL with properly escaped variables for pushing
+                            git remote set-url origin https://\${GH_USER}:\${GH_TOKEN}@github.com/manasavenu-2004/maker_pipeline.git
+                            
+                            # Fetch and rebase to get any latest changes from remote
+                            git pull --rebase origin main
+                            
+                            # Perform sed update, commit, and push
+                            git clone https://\${GH_USER}:\${GH_TOKEN}@github.com/manasavenu-2004/maker_pipeline.git .
+                            sed -i '/name: maker/{n;s|image:.*|image: manasavenu-2004/maker:${env.BUILD_NUMBER}|}' manifests/deployment.yaml
+                            git config user.name "manasavenu-2004"
+                            git config user.email "manasavenu88914@gmail.com"
+                            git commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
+                            git push origin main
+                        """
+                    }
                 }
             }
         }
