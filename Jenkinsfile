@@ -63,6 +63,16 @@ pipeline {
                             
                             # Perform sed update, commit, and push
                             sed -i '/name: maker/{n;s|image:.*|image: manasavenu2004/maker:${env.BUILD_NUMBER}|}' maker_pipeline/manifests/deployment.yaml
+                            sh '''
+    echo "===== CURRENT DIRECTORY ====="
+    pwd
+
+    echo "===== FILES ====="
+    ls -la
+
+    echo "===== FIND DEPLOYMENT FILE ====="
+    find . -name deployment.yaml
+'''
                             git config user.name "manasavenu-2004"
                             git config user.email "manasavenu88914@gmail.com"
                             git commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
