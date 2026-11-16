@@ -1,21 +1,22 @@
+
 pipeline {
     agent any
 
     environment {
         DOCKER_CREDENTIALS_ID = 'docker-cred'
-        DOCKER_IMAGE          = 'manasavenu2004/maker' // Format: username/maker
-        SONAR_SERVER_NAME     = 'sonarqube-env' 
-        SONAR_SCANNER_TOOL    = 'sonar-scanner'     
+        DOCKER_IMAGE          = 'manasavenu2004/maker'
+        SONAR_SERVER_NAME     = 'sonarqube-env'
+        SONAR_SCANNER_TOOL    = 'sonar-scanner'
         GIT_CREDENTIALS_ID    = 'github-cred'
         MANIFEST_REPO         = 'https://github.com/manasavenu-2004/maker_pipeline.git'
         MANIFEST_BRANCH       = 'main'
     }
 
     stages {
+
         stage('Checkout Source Code') {
             steps {
-                //checkout scm
-                echo "passed"
+                echo "Source code checkout completed"
             }
         }
 
@@ -23,59 +24,77 @@ pipeline {
             steps {
                 script {
                     def scannerHome = tool "${SONAR_SCANNER_TOOL}"
+
                     withSonarQubeEnv("${SONAR_SERVER_NAME}") {
-                        sh "${scannerHome}/bin/sonar-scanner \
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
                             -Dsonar.projectKey=maker-key \
-                            -Dsonar.projectName='maker-project' \
-                            -Dsonar.sources=."
+                            -Dsonar.projectName=maker-project \
+                            -Dsonar.sources=.
+                        """
                     }
                 }
             }
         }
 
-        stage('Build & Post Docker Image') {
-    steps {
-        script {
-            withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                sh """
-                    echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
-                    
-                    docker build -t ${DOCKER_IMAGE}:${env.BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest -f Dockerfile .
-                    
-                    docker push ${DOCKER_IMAGE}:${env.BUILD_NUMBER}
-                    docker push ${DOCKER_IMAGE}:latest
-                """
-            }
-        }
-    }
-}
-
-       stage('Update Manifest Repo') {
+        stage('Build & Push Docker Image') {
             steps {
-                dir('manifest-workspace') {
-                    withCredentials([usernamePassword(credentialsId: 'github-cred', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                script {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: "${DOCKER_CREDENTIALS_ID}",
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                        )
+                    ]) {
                         sh """
-                            # Configure remote URL with properly escaped variables for pushing
-                            git remote set-url origin https://\${GH_USER}:\${GH_TOKEN}@github.com/manasavenu-2004/maker_pipeline.git
-                            
-                            # Fetch and rebase to get any latest changes from remote
-                            git pull --rebase origin main
-                            
-                            # Perform sed update, commit, and push
-                           sh '''
-echo "===== CURRENT DIRECTORY ====="
-pwd
-echo "===== FILES ====="
-ls -la
-echo "===== FIND DEPLOYMENT ====="
-find . -name deployment.yaml
-'''
-                            git config user.name "manasavenu-2004"
-                            git config user.email "manasavenu88914@gmail.com"
-                            git commit -am "chore(manifest): update maker image tag to ${env.BUILD_NUMBER} [skip ci]"
-                            git push origin main
+                            echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
+
+                            docker build \
+                            -t ${DOCKER_IMAGE}:${BUILD_NUMBER} \
+                            -t ${DOCKER_IMAGE}:latest \
+                            -f Dockerfile .
+
+                            docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                            docker push ${DOCKER_IMAGE}:latest
                         """
                     }
+                }
+            }
+        }
+
+        stage('Update Manifest Repo') {
+            steps {
+                dir('manifest-workspace') {
+
+                    // Clone the manifest repository
+                    git branch: "${MANIFEST_BRANCH}",
+                        credentialsId: "${GIT_CREDENTIALS_ID}",
+                        url: "${MANIFEST_REPO}"
+
+                    sh """
+                        echo "===== CURRENT DIRECTORY ====="
+                        pwd
+
+                        echo "===== FILES ====="
+                        ls -la
+
+                        echo "===== MANIFEST FILE ====="
+                        ls -la manifests/
+
+                        # Update Docker image tag
+                        sed -i '/name: maker/{n;s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|}' manifests/deployment.yaml
+
+                        # Configure Git identity
+                        git config user.name "manasavenu-2004"
+                        git config user.email "manasavenu88914@gmail.com"
+
+                        # Commit and push updated manifest
+                        git add manifests/deployment.yaml
+                        git commit -m "chore(manifest): update maker image tag to ${BUILD_NUMBER} [skip ci]" || echo "No changes to commit"
+
+                        git push origin ${MANIFEST_BRANCH}
+                    """
                 }
             }
         }
@@ -85,6 +104,7 @@ find . -name deployment.yaml
         success {
             echo 'Pipeline executed successfully! Manifest repo updated with new image tag.'
         }
+
         failure {
             echo 'Pipeline failed. Please review the stage logs above.'
         }
